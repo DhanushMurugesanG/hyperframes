@@ -1,20 +1,14 @@
-// Cuts from the frame-to-frame difference itself, ported from the Studio's videoShots.mjs: ffmpeg's scene score
-// missed two of the James Blake source's cuts at 0.25, so a cut is a frame far unlike the one before and several
-// times unlike its neighbours' changes. A punch-in at the same angle changes less (dan's 9.743 s: 11 grey levels),
-// so a smaller change also counts when nothing else near it changes anywhere near as much: a soft cut.
+// Cuts from the frame-to-frame difference, ported from the Studio's videoShots.mjs; ffmpeg's scene score misses some.
+// A punch-in at the same angle changes less than a cut, so a smaller change that stands alone is a soft cut.
 import { decode, meanAbsDiff, type Frames } from "./media.js";
 
-// Small enough to read a minute quickly, large enough to tell a cut from motion.
 export const SIG_W = 64;
 export const SIG_H = 36;
 const CUT_LEVEL = 12;
 const CUT_RATIO = 4;
-// A soft cut: at least SOFT_LEVEL, SOFT_RATIO times its neighbours' median and SOFT_ALONE times the largest of them.
 const SOFT_LEVEL = 10;
 const SOFT_RATIO = 8;
 const SOFT_ALONE = 4;
-// The other side confirms a soft cut with a change of CONFIRM_LEVEL, CUT_RATIO times its neighbours' median and
-// CONFIRM_SHARE of the cut's own change, within a frame of it.
 const CONFIRM_LEVEL = 6;
 const CONFIRM_SHARE = 0.5;
 const NEIGHBOURS = 12;
@@ -25,7 +19,6 @@ export interface Cut {
   frames: number;
   /** Its largest change, in mean grey levels. */
   change: number;
-  /** Found only by the soft rule. */
   soft?: true;
 }
 
@@ -39,7 +32,6 @@ const median = (values: number[]) => {
   return sorted[Math.floor(sorted.length / 2)] ?? 0;
 };
 
-/** Each frame's mean grey difference from the one before (0 for the first). */
 export function frameChanges(frames: Uint8Array[]): number[] {
   return frames.map((f, i) => (i ? meanAbsDiff(frames[i - 1]!, f) : 0));
 }
@@ -47,7 +39,6 @@ export function frameChanges(frames: Uint8Array[]): number[] {
 const neighbours = (diffs: number[], i: number) =>
   diffs.slice(Math.max(1, i - NEIGHBOURS), i).concat(diffs.slice(i + 1, i + NEIGHBOURS + 1));
 
-/** The frame indexes where a new shot starts, from each frame's change (`frameChanges`). */
 export function cutsIn(diffs: number[]): Cut[] {
   const hits = diffs.flatMap((d, i): { frame: number; change: number; soft?: true }[] => {
     if (i === 0) return [];

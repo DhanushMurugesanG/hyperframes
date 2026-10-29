@@ -39,7 +39,7 @@ describe("againstStart", () => {
   it("reads a generated shot from its own start and a full render on film time", () => {
     // A 5.2 s HeyGen shot for the original's 9.5-12.27 s: its face is at 0-2.77 s of the clip, not 9.5.
     expect(againstStart(5.17, 12.27, 9.5)).toBe(0);
-    // A shot longer than the window but shorter than the film is still its own clip (it used to be read from --from).
+    // A shot longer than the window but shorter than the film is still its own clip.
     expect(againstStart(7.29, 12.27, 2.77)).toBe(0);
     expect(againstStart(12.27, 12.27, 9.5)).toBe(9.5);
     expect(againstStart(12.3, 12.27, 9.5)).toBe(9.5);

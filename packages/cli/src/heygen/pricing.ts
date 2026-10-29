@@ -34,8 +34,7 @@ const VIDEO_768P_PER_S = 0.018;
 const VIDEO_REF_768P_PER_S = 0.05;
 const MUSIC_PER_TRACK = 0.08;
 const AVATAR_IV_PER_MIN = 4.83;
-// An avatar's length is estimated from its script, as the app does.
-const WORDS_PER_S = 2;
+const SCRIPT_WORDS_PER_S = 2;
 
 // fallow-ignore-next-line complexity
 export function priceOf(r: GenerateRequest): Price {
@@ -66,7 +65,7 @@ export function priceOf(r: GenerateRequest): Price {
     }
     case "avatar": {
       const words = (r.script ?? "").split(/\s+/).filter(Boolean).length;
-      const seconds = Math.max(1, Math.floor(words / WORDS_PER_S));
+      const seconds = Math.max(1, Math.floor(words / SCRIPT_WORDS_PER_S));
       return at(
         Math.ceil(seconds * AVATAR_IV_PER_MIN) / 60,
         `avatar video, about ${seconds} s from ${words} words at $4.83 a minute`,

@@ -8,10 +8,8 @@ const FACE_HOLDS = 0.25;
 const FACE_SLIDES = 0.15;
 const FACE_FLOOR = 0.06;
 /**
- * The smallest face looked for by default, as a share of the frame's height: well under FACE_FLOOR (a smaller face
- * fails either way), and it skips the cascades' smallest, costliest windows. Those start at 20 px and grow by 10% a
- * step, so a minimum on one of the steps finds the faces the full search finds from that size up, with the same
- * boxes; scaling the frame down instead moves every box by up to a step.
+ * The smallest face looked for by default, as a share of the frame's height: well under FACE_FLOOR, and it skips the
+ * cascades' costliest windows. A minimum on their ladder keeps the full search's boxes; scaling the frame moves them.
  */
 const FACE_MIN = 0.04;
 const WORK_W = 960;

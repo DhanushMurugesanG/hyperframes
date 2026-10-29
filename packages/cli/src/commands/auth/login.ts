@@ -115,9 +115,12 @@ function isRemoteOrHeadless(): boolean {
     process.env["BROWSER"] === "none" ||
     process.env["HF_NO_BROWSER"] === "1" ||
     remoteEnvironment ||
-    // A coding agent's shell has no terminal, yet the browser opens on this machine and the person finishes there.
-    (process.stdout.isTTY !== true && (isCI() || !isAgentDriven())),
+    (process.stdout.isTTY !== true && !agentShellOnThisMachine()),
   );
+}
+
+function agentShellOnThisMachine(): boolean {
+  return !isCI() && isAgentDriven();
 }
 
 function assertAttendedDeviceFlow(): void {

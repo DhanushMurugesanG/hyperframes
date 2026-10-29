@@ -24,7 +24,6 @@ function mockPlan(): Plan | null {
 // Payment routes live on api2, beside the OAuth ones; the v3 generation routes stay on api.
 const billingBaseUrl = () => resolveCloudBaseUrl().replace("://api.", "://api2.");
 
-/** The plan from `/v1/payment/hyperframes/subscription`, else the mock, else null. */
 export async function readPlan(): Promise<Plan | null> {
   try {
     const res = await fetch(`${billingBaseUrl()}/v1/payment/hyperframes/subscription`, {
@@ -35,8 +34,7 @@ export async function readPlan(): Promise<Plan | null> {
     const data = isRecord(body) && isRecord(body.data) ? body.data : body;
     if (!res.ok || !isRecord(data)) return mockPlan();
     const usage = isRecord(data.usage) ? data.usage : {};
-    // Shaped as studio-contracts' BillingSubscription: `subscription` is null on Free, and an unpaid placeholder
-    // carries its plan's name before the first invoice funds it.
+    // studio-contracts' BillingSubscription: `subscription` is null on Free; an unpaid placeholder still names a plan.
     const sub = isRecord(data.subscription) ? data.subscription : null;
     const paid = !!sub && !UNPAID.has(String(sub.status));
     return {

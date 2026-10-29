@@ -474,10 +474,9 @@ function buildAuthorizeUrl(args: {
     code_challenge: args.challenge,
     code_challenge_method: "S256",
   });
-  // Keep a query the endpoint already carries (e.g. `?lang=en` for the sign-in page's language).
-  const url = new URL(authorizeEndpoint());
-  for (const [key, value] of params) url.searchParams.set(key, value);
-  return url.toString();
+  const urlWithEndpointQuery = new URL(authorizeEndpoint());
+  for (const [key, value] of params) urlWithEndpointQuery.searchParams.set(key, value);
+  return urlWithEndpointQuery.toString();
 }
 
 async function exchangeCodeForTokens(args: {

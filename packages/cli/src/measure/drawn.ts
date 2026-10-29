@@ -1,9 +1,8 @@
 // A drawn element (text, a badge, a card) over a regenerated person, scored by itself: what is behind it differs on
-// purpose, so SSIM over its box measures the background. Each frame finds the element's ink on both sides (pixels
-// far from the median colour of their neighbourhood, so a letter stands out from any background behind it), aligns
-// the two within a few pixels, and asks how much of either side's ink the other matches in colour. Wrong weight,
-// tracking, slant, size, fill, a doubled letter or a late onset all leave ink unmatched; a different background
-// leaves none. Calibrated on the reverse bench (10-23): correct titles and captions 0.82–0.94, wrong ones 0.40–0.66.
+// purpose, so SSIM over its box measures the background. Each frame finds the element's ink on both sides, aligns
+// them within a few pixels, and asks how much of either side's ink the other matches in colour. Wrong weight,
+// tracking, slant, size, fill, a doubled letter or a late onset leave ink unmatched; a different background leaves
+// none. Calibrated on the reverse bench (10-23): correct titles and captions 0.82–0.94, wrong ones 0.40–0.66.
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,7 +17,6 @@ const MATCH_COLOUR = 45;
 const ALIGN = 3;
 // Fewer ink pixels than this on both sides: nothing drawn in that frame on either side.
 const MIN_INK = 30;
-// Elements are read at most this often.
 const MAX_FPS = 10;
 
 export interface DrawnFrame {
@@ -89,8 +87,7 @@ export function scoreDrawnFrame(a: Uint8Array, b: Uint8Array, w: number, h: numb
   const [ia, ib] = [inkOf(a, w, h), inkOf(b, w, h)];
   const [na, nb] = [ia.reduce((s, v) => s + v, 0), ib.reduce((s, v) => s + v, 0)];
   if (na + nb < MIN_INK) return { score: null, offset: [0, 0], inkOriginal: na, inkYours: nb };
-  // The shift of yours whose ink overlaps the original's most.
-  let best = { iou: -1, dx: 0, dy: 0 };
+  let mostOverlappingShift = { iou: -1, dx: 0, dy: 0 };
   for (let dy = -ALIGN; dy <= ALIGN; dy++)
     for (let dx = -ALIGN; dx <= ALIGN; dx++) {
       let [both, either] = [0, 0];
@@ -105,7 +102,7 @@ export function scoreDrawnFrame(a: Uint8Array, b: Uint8Array, w: number, h: numb
         }
       }
       const iou = either ? both / either : 0;
-      if (iou > best.iou) best = { iou, dx, dy };
+      if (iou > mostOverlappingShift.iou) mostOverlappingShift = { iou, dx, dy };
     }
   // Ink on either side counts as matched when the other side has a pixel of its colour within one pixel.
   const at = (x: number, y: number) =>
@@ -123,7 +120,7 @@ export function scoreDrawnFrame(a: Uint8Array, b: Uint8Array, w: number, h: numb
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      const [sx, sy] = [x - best.dx, y - best.dy];
+      const [sx, sy] = [x - mostOverlappingShift.dx, y - mostOverlappingShift.dy];
       const inB = sy >= 0 && sy < h && sx >= 0 && sx < w && ib[sy * w + sx] === 1;
       if (ia[i]) {
         inkA++;
@@ -137,7 +134,7 @@ export function scoreDrawnFrame(a: Uint8Array, b: Uint8Array, w: number, h: numb
   const [recall, precision] = [inkA ? hitA / inkA : 0, inkB ? hitB / inkB : 0];
   return {
     score: recall + precision ? (2 * recall * precision) / (recall + precision) : 0,
-    offset: [0 - best.dx, 0 - best.dy],
+    offset: [0 - mostOverlappingShift.dx, 0 - mostOverlappingShift.dy],
     inkOriginal: na,
     inkYours: nb,
   };
@@ -145,7 +142,6 @@ export function scoreDrawnFrame(a: Uint8Array, b: Uint8Array, w: number, h: numb
 
 const median = (v: number[]) => [...v].sort((x, y) => x - y)[v.length >> 1] ?? 0;
 
-/** The verdict of an element from its frames. */
 export function drawnVerdict(
   box: Roi,
   window: [number, number],

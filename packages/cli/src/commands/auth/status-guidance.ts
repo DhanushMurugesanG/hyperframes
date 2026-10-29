@@ -69,7 +69,6 @@ export function buildUnconfiguredLines(
   ctx: UnconfiguredContext,
   engines?: OfflineEngineLine[],
 ): string[] {
-  // The agent relays one step and waits; local engines and API keys are for the person to raise.
   if (ctx.agent)
     return [
       c.warn("Not signed in to HeyGen."),

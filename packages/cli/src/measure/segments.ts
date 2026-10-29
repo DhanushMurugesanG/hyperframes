@@ -1,9 +1,6 @@
-// The segments of a REVERSE.md: `## S01 · 0.00–2.40 s · title` headings, each with an optional
-// `Pixels: rebuilt | reused | regenerated` line saying where that window's picture comes from, and an optional
-// `Regenerated: x, y, w, h` line for a rebuilt or reused segment with a regenerated region (a re-shot presenter
-// under drawn graphics): the region's box in the source's pixels, or as shares of the frame when all are ≤ 1. Each
-// `Drawn: x, y, w, h` line is a drawn element over a regenerated person, still judged by pixels, with an optional
-// `a–b s` when it shows for part of the segment. A `Copy:` line that quotes a string says the segment draws text.
+// The segments of a REVERSE.md: `## S01 · 0.00–2.40 s · title` headings, each with optional lines
+// `Pixels: rebuilt | reused | regenerated`, `Regenerated: x, y, w, h` (source pixels, or shares of the frame when
+// all are ≤ 1), `Drawn: x, y, w, h` with an optional `a–b s`, and `Copy:` quoting a string; see `Segment`.
 import { existsSync, readFileSync } from "node:fs";
 import { Fix } from "./media.js";
 

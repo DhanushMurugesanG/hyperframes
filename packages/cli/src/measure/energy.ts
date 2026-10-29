@@ -1,6 +1,5 @@
 // Body and camera motion where the pixels differ (a regenerated shot, another person, another room), ported from
-// the Studio's motion-energy.mjs. Both clips are sampled on one 12 fps grid (mixed 24/30 fps skews per-frame
-// differences), ROI scaled to 270 px wide, luma. Energy(t) = mean |frame_t - frame_t-1|.
+// the Studio's motion-energy.mjs. Both clips share one 12 fps grid, as mixed 24/30 fps skews per-frame differences.
 import { meanAbsDiff, pearson, readClip, round, type Clip, type Roi } from "./media.js";
 
 const ENERGY_RATE = 12;
