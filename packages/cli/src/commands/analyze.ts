@@ -1,15 +1,7 @@
 // HeyGen's video model watches a video and drafts its timeline as JSON. Its route samples at most 2 fps and reads
 // one clip of at most 90 s at that rate, so the video goes in parts of up to 30 s split at cuts, each slowed until
 // 2 fps there is about 6 fps of the original, and every time in the answer is mapped back to the film.
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { defineCommand } from "../utils/defineCommand.js";
@@ -75,7 +67,9 @@ export function underInlineCap(
   for (const crf of [23, 30, 36]) {
     const out = join(dir, `${name}-${crf}.mp4`);
     runFfmpeg(args(crf, out));
-    if (statSync(out).size <= INLINE_BYTES) return readFileSync(out);
+    // Read once and measure the bytes read: a stat then a read could see two different files.
+    const bytes = readFileSync(out);
+    if (bytes.length <= INLINE_BYTES) return bytes;
   }
   throw new Fix(
     `a ${round(seconds, 1)} s part stays over HeyGen's 16 MB inline cap`,
