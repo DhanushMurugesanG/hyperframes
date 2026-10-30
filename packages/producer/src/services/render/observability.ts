@@ -613,6 +613,8 @@ export interface StageStallRule {
   complete?: () => boolean;
   /** Allowed silence once `complete()` holds; defaults to `noProgressMs`. */
   tailMs?: number;
+  /** Where the stage was waiting, appended to the stall message. */
+  detail?: () => string | undefined;
 }
 
 /**
@@ -624,10 +626,10 @@ export class RenderStageStalledError extends CaptureFailure {
   readonly owner = "system" as const;
   readonly retryable = false as const;
 
-  constructor(phase: string, silentMs: number, progress: number) {
+  constructor(phase: string, silentMs: number, progress: number, detail?: string) {
     super({
       kind: "protocol_timeout",
-      message: `[Render] ${phase} stalled: no progress for ${silentMs}ms (stuck at ${progress}).`,
+      message: `[Render] ${phase} stalled: no progress for ${silentMs}ms (stuck at ${progress}).${detail ? ` ${detail}` : ""}`,
     });
     this.name = "RenderStageStalledError";
   }
@@ -662,7 +664,7 @@ function watchStall(phase: string, rule: StageStallRule) {
         }
         if (current !== last) return restartWindow(rule.noProgressMs);
         if (Date.now() - lastChangeAt < budgetMs) return;
-        const error = new RenderStageStalledError(phase, budgetMs, current);
+        const error = new RenderStageStalledError(phase, budgetMs, current, rule.detail?.());
         if (attempt && !attempt.signal.aborted) {
           attempt.abort(error);
           return restartWindow(rule.noProgressMs);
