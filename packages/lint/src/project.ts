@@ -40,6 +40,7 @@ import {
   lintVideoMediaStartPastEof,
 } from "./hevcPreviewLint.js";
 import { lintHyperframeHtml } from "./hyperframeLinter.js";
+import { collectGoogleFontFamilies, extractFontFaceFamilies } from "./rules/fonts.js";
 import { lintProjectShaderScripts } from "./projectShaders.js";
 import type {
   HyperframeLintFinding,
@@ -198,6 +199,48 @@ function resolveCssAssetCandidates(
   return resolveLocalAssetCandidates(projectDir, url);
 }
 
+function mountedSources(
+  projectDir: string,
+  rootHtml: string,
+  rootCompSrcPath?: string,
+): HtmlSource[] {
+  const sources: HtmlSource[] = [{ html: rootHtml, compSrcPath: rootCompSrcPath }];
+  const seen = new Set<string>();
+  for (const source of sources) {
+    const { document } = parseHTML(source.html);
+    for (const host of querySelectorAllIncludingTemplates(document, "[data-composition-src]")) {
+      const src = host.getAttribute("data-composition-src")?.trim();
+      if (!src || isUnresolvedAssetPlaceholder(src) || isRemoteOrInlineUrl(src)) continue;
+      const path = resolve(projectDir, src);
+      if (seen.has(path) || !isWithinProjectRoot(projectDir, path)) continue;
+      seen.add(path);
+      const read = readProjectFile(path);
+      if (read.kind !== "file") continue;
+      sources.push({
+        html: read.text,
+        compSrcPath: relative(resolve(projectDir), path).replace(/\\/g, "/"),
+      });
+    }
+  }
+  return sources;
+}
+
+function declaredProjectFontFamilies(projectDir: string, sources: HtmlSource[]): string[] {
+  const families = new Set<string>();
+  for (const { html, compSrcPath } of sources) {
+    const { document } = parseHTML(html);
+    const styles = [
+      ...querySelectorAllIncludingTemplates(document, "style").map((style) => ({
+        content: style.textContent ?? "",
+      })),
+      ...collectLocalStylesheets(projectDir, document, compSrcPath),
+    ];
+    for (const family of extractFontFaceFamilies(styles)) families.add(family);
+    for (const family of collectGoogleFontFamilies(html, styles)) families.add(family);
+  }
+  return [...families];
+}
+
 export async function lintProject(
   projectDir: string,
   entryFile?: string,
@@ -215,11 +258,16 @@ export async function lintProject(
   let totalInfos = 0;
 
   const rootHtml = readFileSync(indexPath, "utf-8");
+  const projectFontFamilies = declaredProjectFontFamilies(
+    projectDir,
+    mountedSources(projectDir, rootHtml, rootCompSrcPath),
+  );
   const rootResult = await lintHyperframeHtml(rootHtml, {
     ...hostOptions,
     filePath: indexPath,
     compSrcPath: rootFile,
     externalStyles: collectExternalStyles(projectDir, rootHtml, rootCompSrcPath),
+    projectFontFamilies,
   });
   results.push({ file: rootFile, result: rootResult, contentHash: contentDigest(rootHtml) });
   totalErrors += rootResult.errorCount;
@@ -262,6 +310,7 @@ export async function lintProject(
         isSubComposition: true,
         compSrcPath,
         externalStyles: collectExternalStyles(projectDir, html, compSrcPath),
+        projectFontFamilies,
       });
       results.push({
         file: `compositions/${file}`,
@@ -280,6 +329,7 @@ export async function lintProject(
     ...lintAudioSrcNotFound(projectDir, allHtmlSources),
     ...lintMissingLocalAsset(projectDir, allHtmlSources),
     ...lintTextureMaskAssetNotFound(projectDir, allHtmlSources),
+    ...lintLinkedStylesheetAssets(projectDir, allHtmlSources),
     ...(!entryFile ? lintMultipleRootCompositions(projectDir) : []),
     ...(!entryFile ? lintBlankRootWithStandaloneComposition(rootHtml, allHtmlSources) : []),
     ...lintDuplicateAudioTracks(projectDir, rootHtml),
@@ -573,6 +623,72 @@ function lintTextureMaskAssetNotFound(
           : "Add the missing texture mask files to the project, or update the mask-image URLs to point to existing files.",
     };
   });
+}
+
+function nearestAncestorMatch(projectDir: string, cssRootRelativePath: string, url: string) {
+  const root = resolve(projectDir);
+  for (let dir = resolve(root, dirname(cssRootRelativePath), ".."); ; dir = dirname(dir)) {
+    if (!isWithinProjectRoot(projectDir, dir)) return null;
+    if (resolveLocalAssetCandidates(projectDir, relative(root, join(dir, url))).some(existsSync)) {
+      return relative(dirname(resolve(root, cssRootRelativePath)), join(dir, url)).replace(
+        /\\/g,
+        "/",
+      );
+    }
+    if (dir === root) return null;
+  }
+}
+
+function lintLinkedStylesheetAssets(
+  projectDir: string,
+  htmlSources: HtmlSource[],
+): HyperframeLintFinding[] {
+  const seen = new Set<string>();
+  const findings: HyperframeLintFinding[] = [];
+  for (const { html, compSrcPath } of htmlSources) {
+    for (const { content, rootRelativePath } of collectLocalStylesheets(
+      projectDir,
+      parseHTML(html).document,
+      compSrcPath,
+    )) {
+      let root: postcss.Root;
+      try {
+        root = postcss.parse(content);
+      } catch (error) {
+        if (!(error instanceof postcss.CssSyntaxError)) throw error;
+        continue;
+      }
+      root.walkDecls((declaration) => {
+        if (/^(?:-webkit-)?mask-image$/i.test(declaration.prop)) return;
+        for (const match of declaration.value.matchAll(CSS_URL_RE)) {
+          const rawUrl = match[1] ?? match[2] ?? match[3] ?? "";
+          if (isUnresolvedAssetPlaceholder(rawUrl)) continue;
+          const url = cleanAssetUrl(rawUrl);
+          if (!url || isRemoteOrInlineUrl(url) || url.startsWith("/")) continue;
+          if (
+            resolveCssAssetCandidates(projectDir, url, undefined, rootRelativePath).some(existsSync)
+          )
+            continue;
+          const key = `${rootRelativePath}\0${url}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const found = nearestAncestorMatch(projectDir, rootRelativePath, url);
+          findings.push({
+            code: "missing_stylesheet_asset",
+            severity: "warning",
+            file: join(projectDir, rootRelativePath),
+            message:
+              `${rootRelativePath} references url(${url}), which is not found beside the stylesheet ` +
+              `(looked in ${dirname(rootRelativePath)}/). The browser resolves url() from the stylesheet, so the file will 404.`,
+            fixHint: found
+              ? `A file exists at "${found}" relative to the stylesheet. Change the url() to that path.`
+              : `Add "${url}" beside the stylesheet, or point the url() at an existing file.`,
+          });
+        }
+      });
+    }
+  }
+  return findings;
 }
 
 function lintMultipleRootCompositions(projectDir: string): HyperframeLintFinding[] {
