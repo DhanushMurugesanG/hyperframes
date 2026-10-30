@@ -20,70 +20,58 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
   loadOpenCvFirst();
   const ref = noTools ? "" : clip("ref.mp4", REF_ARGS);
 
-  it("fails the original's whole frame played where copy is meant to be rebuilt", async () => {
-    const ledger = join(dir, "manifest.jsonl");
-    writeFileSync(
-      ledger,
-      JSON.stringify({
-        type: "video",
-        path: "assets/all.mp4",
-        provenance: { provider: "original", window: [0, 3], roi: [0, 0, 320, 180] },
-      }) + "\n",
-    );
-    const titled = '## S01 · 0–3 s · Title\nPixels: rebuilt\nCopy: "TITLE"\n';
-    const copy = await diffVerdicts({
+  // The ledger cuts the original's whole frame for 0–3 s. Two comparisons per test, so none nears the per-test
+  // limit under the flake gate's contention.
+  const ledger = join(dir, "manifest.jsonl");
+  writeFileSync(
+    ledger,
+    JSON.stringify({
+      type: "video",
+      path: "assets/all.mp4",
+      provenance: { provider: "original", window: [0, 3], roi: [0, 0, 320, 180] },
+    }) + "\n",
+  );
+  const titled = '## S01 · 0–3 s · Title\nPixels: rebuilt\nCopy: "TITLE"\n';
+  const reuse = (yours: string, md: string, name: string) =>
+    diffVerdicts({
       reference: ref,
-      yours: ref,
-      segments: parseSegments(titled),
+      yours,
+      segments: parseSegments(md),
       ledger,
-      outDir: join(dir, "copy"),
+      outDir: join(dir, name),
     });
+
+  it("fails the original's whole frame played where copy is meant to be rebuilt", async () => {
+    const copy = await reuse(ref, titled, "copy");
     expect(copy.whole_frame_reuse).toMatchObject({ spans: [[0, 3]], drawn: [[0, 3]], pass: false });
     expect(copy.segments?.[0]?.pass).toBe(false);
     expect(copy.pass).toBe(false);
     // Footage reused with its burned-in title is a copy too (Miao, 2026-10-23: no whole-frame cut with drawn things).
-    const burned = await diffVerdicts({
-      reference: ref,
-      yours: ref,
-      segments: parseSegments(
-        '## S01 · 0–3 s · Title over footage\nPixels: reused\nCopy: "TITLE"\n',
-      ),
-      ledger,
-      outDir: join(dir, "burned"),
-    });
+    const burned = await reuse(
+      ref,
+      '## S01 · 0–3 s · Title over footage\nPixels: reused\nCopy: "TITLE"\n',
+      "burned",
+    );
     expect(burned.whole_frame_reuse).toMatchObject({ share: 1, drawn: [[0, 3]], pass: false });
-    // Footage with nothing drawn on it may be cut whole.
-    const footage = await diffVerdicts({
-      reference: ref,
-      yours: ref,
-      segments: parseSegments("## S01 · 0–3 s · Footage\nPixels: reused\n"),
-      ledger,
-      outDir: join(dir, "footage"),
-    });
+  });
+
+  it("passes footage with nothing drawn on it cut whole", async () => {
+    const footage = await reuse(ref, "## S01 · 0–3 s · Footage\nPixels: reused\n", "footage");
     expect(footage.whole_frame_reuse).toMatchObject({ share: 1, drawn: [], pass: true });
     expect(footage.pass).toBe(true);
-    // A cut that only fed a generation (a motion guide) is not played: yours differs from it.
+  });
+
+  it("does not count a cut that only fed a generation as reuse", async () => {
+    // A motion guide is not played: yours differs from it.
     const flipped = clip("guided.mp4", [...["-i", ref, "-vf"], "hflip"]);
-    const guided = await diffVerdicts({
-      reference: ref,
-      yours: flipped,
-      segments: parseSegments(titled),
-      ledger,
-      outDir: join(dir, "guided"),
-    });
+    const guided = await reuse(flipped, titled, "guided");
     expect(guided.whole_frame_reuse).toMatchObject({ spans: [], pass: true });
     // A generated shot that starts from the original's first frame matches it for a few frames only: not reuse.
     const started = clip("started.mp4", [
       ...["-i", ref, "-filter_complex"],
       "[0]split[a][b];[b]hflip[f];[a][f]overlay=enable='gte(t\\,0.2)'",
     ]);
-    const start = await diffVerdicts({
-      reference: ref,
-      yours: started,
-      segments: parseSegments(titled),
-      ledger,
-      outDir: join(dir, "started"),
-    });
+    const start = await reuse(started, titled, "started");
     expect(start.whole_frame_reuse).toMatchObject({ spans: [], pass: true });
   });
 
