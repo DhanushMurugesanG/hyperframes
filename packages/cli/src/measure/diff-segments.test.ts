@@ -1,12 +1,18 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { diffVideos } from "./diff.js";
-import { clipFolder, noTools, REF_ARGS } from "./diff.test-helpers.js";
+import {
+  clipFolder,
+  diffVerdicts,
+  loadOpenCvFirst,
+  noTools,
+  REF_ARGS,
+} from "./diff.test-helpers.js";
 import { parseSegments } from "./segments.js";
 
 const { dir, clip } = clipFolder("hf-diff-seg-test-");
 
 describe.skipIf(noTools)("diffVideos with segments", () => {
+  loadOpenCvFirst();
   const ref = noTools ? "" : clip("ref.mp4", REF_ARGS);
 
   it("judges a rebuilt segment's regenerated region by motion and look, the rest by SSIM", async () => {
@@ -16,14 +22,14 @@ describe.skipIf(noTools)("diffVideos with segments", () => {
       "[0]split[a][b];[b]crop=320:90:0:90,hflip[f];[a][f]overlay=0:90",
     ]);
     const md = "## S01 · 0–3 s · Board over a presenter\nPixels: rebuilt\n";
-    const plain = await diffVideos({
+    const plain = await diffVerdicts({
       reference: ref,
       yours: mixed,
       segments: parseSegments(md),
       outDir: join(dir, "mixed-plain"),
     });
     expect(plain.segments?.[0]?.pass).toBe(false);
-    const r = await diffVideos({
+    const r = await diffVerdicts({
       reference: ref,
       yours: mixed,
       segments: parseSegments(`${md}Regenerated: 0, 0.5, 1, 0.5\n`),
@@ -39,7 +45,7 @@ describe.skipIf(noTools)("diffVideos with segments", () => {
       ...["-i", mixed, "-vf"],
       "drawbox=x=20:y=10:w=60:h=40:color=red:t=fill",
     ]);
-    const bad = await diffVideos({
+    const bad = await diffVerdicts({
       reference: ref,
       yours: boxed,
       segments: parseSegments(`${md}Regenerated: 0, 0.5, 1, 0.5\n`),
@@ -62,7 +68,12 @@ describe.skipIf(noTools)("diffVideos with segments", () => {
   const md =
     "## S01 · 0–3 s · Label over a presenter\nPixels: rebuilt\nRegenerated: 0, 90, 320, 90\n";
   const judge = (yours: string, text: string, name: string) =>
-    diffVideos({ reference: base, yours, segments: parseSegments(text), outDir: join(dir, name) });
+    diffVerdicts({
+      reference: base,
+      yours,
+      segments: parseSegments(text),
+      outDir: join(dir, name),
+    });
 
   it("hides a drawn element in a regenerated region without a Drawn line, and flags a box over the whole frame", async () => {
     expect((await judge(off, md, "drawn-hidden")).segments?.[0]?.pass).toBe(true);
@@ -95,7 +106,7 @@ describe.skipIf(noTools)("diffVideos with segments", () => {
     const right = clip("solo-right.mp4", [...backdrop("0x604030"), "-vf", strokes(6)]);
     const thin = clip("solo-thin.mp4", [...backdrop("0x604030"), "-vf", strokes(3)]);
     const box: [number, number, number, number] = [116, 106, 44, 32];
-    const good = await diffVideos({
+    const good = await diffVerdicts({
       reference: base,
       yours: right,
       at: [0.5, 1, 1.5, 2],
@@ -106,7 +117,7 @@ describe.skipIf(noTools)("diffVideos with segments", () => {
     expect(good.drawn).toHaveLength(2);
     expect(good.drawn?.[0]).toMatchObject({ id: "D1", box, window: [0, 3], frames: 4, pass: true });
     expect(good.drawn?.[1]).toMatchObject({ id: "D2", window: [1, 3], frames: 3, pass: true });
-    const bad = await diffVideos({
+    const bad = await diffVerdicts({
       reference: base,
       yours: thin,
       at: [0.5, 1, 1.5, 2],

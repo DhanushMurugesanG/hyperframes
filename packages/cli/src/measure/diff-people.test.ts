@@ -2,14 +2,22 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { diffVideos, soundOffset } from "./diff.js";
-import { clipFolder, ffmpeg, noTools, REF_ARGS } from "./diff.test-helpers.js";
+import { soundOffset } from "./diff.js";
+import {
+  clipFolder,
+  diffVerdicts,
+  ffmpeg,
+  loadOpenCvFirst,
+  noTools,
+  REF_ARGS,
+} from "./diff.test-helpers.js";
 import { probeVideo } from "./media.js";
 import { parseSegments } from "./segments.js";
 
 const { dir, clip } = clipFolder("hf-diff-person-test-");
 
 describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
+  loadOpenCvFirst();
   const ref = noTools ? "" : clip("ref.mp4", REF_ARGS);
 
   it("fails the original's whole frame played where copy is meant to be rebuilt", async () => {
@@ -23,7 +31,7 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
       }) + "\n",
     );
     const titled = '## S01 · 0–3 s · Title\nPixels: rebuilt\nCopy: "TITLE"\n';
-    const copy = await diffVideos({
+    const copy = await diffVerdicts({
       reference: ref,
       yours: ref,
       segments: parseSegments(titled),
@@ -34,7 +42,7 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
     expect(copy.segments?.[0]?.pass).toBe(false);
     expect(copy.pass).toBe(false);
     // Footage reused with its burned-in title is a copy too (Miao, 2026-10-23: no whole-frame cut with drawn things).
-    const burned = await diffVideos({
+    const burned = await diffVerdicts({
       reference: ref,
       yours: ref,
       segments: parseSegments(
@@ -45,7 +53,7 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
     });
     expect(burned.whole_frame_reuse).toMatchObject({ share: 1, drawn: [[0, 3]], pass: false });
     // Footage with nothing drawn on it may be cut whole.
-    const footage = await diffVideos({
+    const footage = await diffVerdicts({
       reference: ref,
       yours: ref,
       segments: parseSegments("## S01 · 0–3 s · Footage\nPixels: reused\n"),
@@ -56,7 +64,7 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
     expect(footage.pass).toBe(true);
     // A cut that only fed a generation (a motion guide) is not played: yours differs from it.
     const flipped = clip("guided.mp4", [...["-i", ref, "-vf"], "hflip"]);
-    const guided = await diffVideos({
+    const guided = await diffVerdicts({
       reference: ref,
       yours: flipped,
       segments: parseSegments(titled),
@@ -69,7 +77,7 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
       ...["-i", ref, "-filter_complex"],
       "[0]split[a][b];[b]hflip[f];[a][f]overlay=enable='gte(t\\,0.2)'",
     ]);
-    const start = await diffVideos({
+    const start = await diffVerdicts({
       reference: ref,
       yours: started,
       segments: parseSegments(titled),
@@ -95,7 +103,7 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
       ...["-i", ref, "-vf"],
       "select=eq(n\\,30),loop=loop=89:size=1,setpts=N/30/TB",
     ]);
-    const r = await diffVideos({
+    const r = await diffVerdicts({
       reference: ref,
       yours: held,
       segments: parseSegments('## S01 · 0–3 s · Collage\nPixels: rebuilt\nCopy: "TITLE"\n'),
@@ -115,10 +123,10 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
         ...["-map", "0:v", "-map", "1:a", "-c:a", "aac"],
       ]);
     const on = voiced("voiced.mp4", 0);
-    const same = await diffVideos({ reference: on, yours: on, outDir: join(dir, "voiced") });
+    const same = await diffVerdicts({ reference: on, yours: on, outDir: join(dir, "voiced") });
     expect(same.duration).toMatchObject({ reference: 3, pass: true });
     expect(same.sound).toMatchObject({ offset_ms: 0, pass: true });
-    const late = await diffVideos({
+    const late = await diffVerdicts({
       reference: on,
       yours: voiced("late.mp4", 0.2),
       outDir: join(dir, "late"),
@@ -155,7 +163,7 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
       ...["-i", ref, "-filter_complex"],
       "[0]split[a][b];[b]crop=320:90:0:90,trim=end_frame=1,tpad=stop=89:stop_mode=clone[f];[a][f]overlay=0:90",
     ]);
-    const r = await diffVideos({
+    const r = await diffVerdicts({
       reference: ref,
       yours: frozen,
       segments: parseSegments(
@@ -172,55 +180,58 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
     expect(r.pass).toBe(true);
   });
 
-  it("fails a re-shot person whose generated clip carries the original's text", async () => {
-    // The original: a white label over a soft lower half (the person). Yours draws the label over a re-shot half.
-    const strokes = (x0: number) =>
-      [0, 14, 28].map((x) => `drawbox=x=${x0 + x}:y=110:w=6:h=24:color=white:t=fill`).join(",");
-    const label = strokes(120);
-    const soft = (delay: number) =>
-      `[0]split[a][b];[b]crop=320:90:0:90,gblur=sigma=10,hue=s=0.4,tpad=start=${delay}:start_mode=clone[f];[a][f]overlay=0:90:shortest=1`;
+  // The original: a white label over a soft lower half (the person). Yours draws the label over a re-shot half.
+  const strokes = (x0: number) =>
+    [0, 14, 28].map((x) => `drawbox=x=${x0 + x}:y=110:w=6:h=24:color=white:t=fill`).join(",");
+  const label = strokes(120);
+  const soft = (delay: number) =>
+    `[0]split[a][b];[b]crop=320:90:0:90,gblur=sigma=10,hue=s=0.4,tpad=start=${delay}:start_mode=clone[f];[a][f]overlay=0:90:shortest=1`;
+  const carried = join(dir, "carried");
+  // The generated clips: one made from a guide with the label on it, one from a masked guide. Yours draws the
+  // label over each; over the first, 8 px off, the letters show doubled.
+  const carriedRef = (): string => {
     const base = clip("carried-ref.mp4", [
       ...["-i", ref, "-filter_complex"],
       `${soft(0)},${label}`,
     ]);
-    const project = join(dir, "carried");
-    mkdirSync(join(project, "assets"), { recursive: true });
-    // The generated clips: one made from a guide with the label on it, one from a masked guide. Yours draws the
-    // label over each; over the first, 8 px off, the letters show doubled.
+    mkdirSync(join(carried, "assets"), { recursive: true });
     clip("carried/assets/dirty.mp4", [...["-i", ref, "-filter_complex"], `${soft(5)},${label}`]);
     clip("carried/assets/clean.mp4", [...["-i", ref, "-filter_complex"], soft(5)]);
     execFileSync(ffmpeg!, [
       ...["-hide_banner", "-loglevel", "error", "-y", "-i", ref, "-filter_complex"],
       `${soft(0)},trim=end_frame=1`,
-      ...["-frames:v", "1", join(project, "assets", "still.png")],
+      ...["-frames:v", "1", join(carried, "assets", "still.png")],
     ]);
-    const ledger = (path: string) => {
-      const file = join(project, `${path}.jsonl`);
-      writeFileSync(
-        file,
-        JSON.stringify({
-          type: "video",
-          path: `assets/${path}.mp4`,
-          provenance: { provider: "heygen", references: ["assets/still.png"], window: [0, 3] },
-        }) + "\n",
-      );
-      return file;
-    };
-    const md =
-      "## S01 · 0–3 s · Label over a presenter\nPixels: rebuilt\nRegenerated: 0, 90, 320, 90\nDrawn: 118, 108, 42, 28\n";
-    const judge = (path: string, x0: number) =>
-      diffVideos({
-        reference: base,
-        yours: clip(`carried-yours-${path}.mp4`, [
-          ...["-i", join(project, "assets", `${path}.mp4`), "-vf"],
-          strokes(x0),
-        ]),
-        segments: parseSegments(md),
-        ledger: ledger(path),
-        project,
-        outDir: join(dir, `carried-${path}`),
-      });
-    const dirty = await judge("dirty", 128);
+    return base;
+  };
+  const carriedBase = noTools ? "" : carriedRef();
+  const judgeCarried = (path: string, x0: number) => {
+    const ledger = join(carried, `${path}.jsonl`);
+    writeFileSync(
+      ledger,
+      JSON.stringify({
+        type: "video",
+        path: `assets/${path}.mp4`,
+        provenance: { provider: "heygen", references: ["assets/still.png"], window: [0, 3] },
+      }) + "\n",
+    );
+    return diffVerdicts({
+      reference: carriedBase,
+      yours: clip(`carried-yours-${path}.mp4`, [
+        ...["-i", join(carried, "assets", `${path}.mp4`), "-vf"],
+        strokes(x0),
+      ]),
+      segments: parseSegments(
+        "## S01 · 0–3 s · Label over a presenter\nPixels: rebuilt\nRegenerated: 0, 90, 320, 90\nDrawn: 118, 108, 42, 28\n",
+      ),
+      ledger,
+      project: carried,
+      outDir: join(dir, `carried-${path}`),
+    });
+  };
+
+  it("fails a re-shot person whose generated clip carries the original's text", async () => {
+    const dirty = await judgeCarried("dirty", 128);
     expect(dirty.segments?.[0]?.person?.text?.[0]).toMatchObject({
       drawn: "S01.D1",
       carried: true,
@@ -228,7 +239,10 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
     expect(dirty.segments?.[0]?.pass).toBe(false);
     expect(dirty.person).toMatchObject({ gates: { text: false }, failed: { text: ["S01"] } });
     expect(dirty.pass).toBe(false);
-    const clean = await judge("clean", 120);
+  });
+
+  it("passes a re-shot person whose generated clip came from a masked guide", async () => {
+    const clean = await judgeCarried("clean", 120);
     expect(clean.segments?.[0]?.drawn?.[0]?.pass).toBe(true);
     expect(clean.segments?.[0]?.person?.gates.text).toBe(true);
     expect(clean.segments?.[0]?.pass).toBe(true);
@@ -242,7 +256,7 @@ describe.skipIf(noTools)("diffVideos: copies, sound and re-shot people", () => {
   it("judges a regenerated segment by motion and look, not pixels", async () => {
     const shifted = clip("shifted.mp4", [...["-i", ref, "-vf"], "hflip"]);
     const segments = parseSegments("## S01 · 0–3 s · AI shot\nPixels: regenerated\n");
-    const r = await diffVideos({
+    const r = await diffVerdicts({
       reference: ref,
       yours: shifted,
       segments,

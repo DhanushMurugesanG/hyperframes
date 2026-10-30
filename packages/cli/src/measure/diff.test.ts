@@ -10,7 +10,13 @@ import {
   selectFilter,
   wholeFrameCuts,
 } from "./diff.js";
-import { clipFolder, noTools, REF_ARGS } from "./diff.test-helpers.js";
+import {
+  clipFolder,
+  diffVerdicts,
+  loadOpenCvFirst,
+  noTools,
+  REF_ARGS,
+} from "./diff.test-helpers.js";
 import { carriedFrame, shotFraming, syncPass } from "./person.js";
 import { parseSegments } from "./segments.js";
 
@@ -190,6 +196,7 @@ describe("frame picks", () => {
 });
 
 describe.skipIf(noTools)("diffVideos", () => {
+  loadOpenCvFirst();
   const ref = noTools ? "" : clip("ref.mp4", REF_ARGS);
 
   it("passes a video against itself", async () => {
@@ -245,15 +252,15 @@ describe.skipIf(noTools)("diffVideos", () => {
       ...["-f", "lavfi", "-i", "color=c=white:s=320x180:r=30:d=3", "-vf"],
       `${label}:enable='lt(t,1.5)'`,
     ]);
-    const r = await diffVideos({ reference: page, yours, outDir: join(dir, "emptied") });
+    const r = await diffVerdicts({ reference: page, yours, outDir: join(dir, "emptied") });
     expect(r.missing_content.pass).toBe(false);
     expect(r.missing_content.share).toBeGreaterThan(0.45);
     expect(r.missing_content.spans[0]![0]).toBeCloseTo(1.5, 1);
     expect(r.pass).toBe(false);
-    const same = await diffVideos({ reference: page, yours: page, outDir: join(dir, "page") });
+    const same = await diffVerdicts({ reference: page, yours: page, outDir: join(dir, "page") });
     expect(same.missing_content).toMatchObject({ share: 0, pass: true });
     // A regenerated segment's picture is its own: what it leaves out is not missing.
-    const regen = await diffVideos({
+    const regen = await diffVerdicts({
       reference: page,
       yours,
       segments: parseSegments("## S01 · 0–3 s · AI shot\nPixels: regenerated\n"),
@@ -274,7 +281,7 @@ describe.skipIf(noTools)("diffVideos", () => {
       ...["-f", "lavfi", "-i", "color=c=white:s=320x180:r=30:d=2", "-vf"],
       "format=gray,geq=lum=235,format=yuv420p",
     ]);
-    const r = await diffVideos({ reference: grain, yours: plain, outDir: join(dir, "grain") });
+    const r = await diffVerdicts({ reference: grain, yours: plain, outDir: join(dir, "grain") });
     expect(r.missing_content).toMatchObject({ share: 0, pass: true });
     expect(r.missing_content.texture.share).toBeGreaterThan(0.9);
     expect(r.warnings.some((w) => w.includes("reported, not failed"))).toBe(true);
@@ -285,7 +292,7 @@ describe.skipIf(noTools)("diffVideos", () => {
       ...["-i", ref, "-vf"],
       "drawbox=x=0:y=0:w=320:h=180:color=black:t=fill:enable='gte(t,2)'",
     ]);
-    const r = await diffVideos({
+    const r = await diffVerdicts({
       reference: ref,
       yours,
       range: [0.5, 1.5],
@@ -303,7 +310,7 @@ describe.skipIf(noTools)("diffVideos", () => {
         ...["-f", "lavfi", "-i", `color=c=0xe0c040:s=320x180:r=30:d=${3 - at}`],
         ...["-filter_complex", "[0][1]concat=n=2:v=1[v]", "-map", "[v]"],
       ]);
-    const r = await diffVideos({
+    const r = await diffVerdicts({
       reference: two("cut-ref.mp4", 1),
       yours: two("cut-late.mp4", 1.1),
       outDir: join(dir, "cuts"),
@@ -323,13 +330,13 @@ describe.skipIf(noTools)("diffVideos", () => {
         ...["-filter_complex", "[0][1]concat=n=2:v=1[v]", "-map", "[v]"],
       ]);
     const soft = step("soft-ref.mp4", "0x8b8b8b", 1);
-    const r = await diffVideos({
+    const r = await diffVerdicts({
       reference: soft,
       yours: step("soft-hard.mp4", "0xa0a0a0", 1),
       outDir: join(dir, "soft"),
     });
     expect(r.cuts).toMatchObject({ reference: [1], missing: [], extra: [], pass: true });
-    const late = await diffVideos({
+    const late = await diffVerdicts({
       reference: soft,
       yours: step("soft-late.mp4", "0xa0a0a0", 1.2),
       outDir: join(dir, "soft-late"),
