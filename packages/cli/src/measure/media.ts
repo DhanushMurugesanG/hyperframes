@@ -6,6 +6,8 @@ import { join, resolve } from "node:path";
 import { findFFmpeg, findFFprobe, getFFmpegInstallHint } from "../browser/ffmpeg.js";
 
 const MAX_BUFFER = 1 << 30;
+/** ffmpeg's own flags on every run. Inline before a spread, the ffprobe `--` contract test reads them as a probe wrapper. */
+const FFMPEG_QUIET = ["-nostdin", "-v", "error"];
 
 /** An error whose message says what to run instead; commands print `fix` as its own line. */
 export class Fix extends Error {
@@ -32,7 +34,7 @@ function ffprobeBin(): string {
 
 /** Runs ffmpeg and returns its stdout; `input` is piped to stdin. */
 export function runFfmpeg(args: string[], input?: Buffer, cwd?: string): Buffer {
-  return execFileSync(ffmpegBin(), ["-nostdin", "-v", "error", ...args], {
+  return execFileSync(ffmpegBin(), [...FFMPEG_QUIET, ...args], {
     maxBuffer: MAX_BUFFER,
     windowsHide: true,
     ...(input ? { input } : {}),
@@ -94,7 +96,7 @@ export function probeVideo(path: string): VideoInfo {
     json = JSON.parse(
       execFileSync(
         ffprobeBin(),
-        ["-v", "error", "-show_streams", "-show_format", "-of", "json", path],
+        ["-v", "error", "-show_streams", "-show_format", "-of", "json", "--", path],
         { maxBuffer: MAX_BUFFER, windowsHide: true },
       ).toString(),
     );
