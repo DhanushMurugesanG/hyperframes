@@ -52,9 +52,8 @@ in `references/operations.md`).
 
 Local Kokoro (voice), mflux (image), and LTX (video) run on-device (free,
 private, offline once cached). The `codex` CLI remains the ChatGPT-sub image
-upsell. Cost rule (X4): the agent confirms before an agent-initiated paid call;
-a user-requested one just runs — `heygen.video` is flagged paid (metered free
-allowance) so an agent-initiated `resolve --type video` confirms first.
+upsell. Paid calls follow the Credits rule in `SKILL.md`: no prices unasked,
+and a question only when a step won't fit.
 
 To force a specific generator (e.g. a user says "make this image with codex"),
 pass `--provider codex`: it pins resolution to that provider and skips the

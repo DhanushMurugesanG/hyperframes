@@ -4,7 +4,7 @@ import { jsonArg, num, runMeasure } from "../../measure/command.js";
 import { Fix } from "../../measure/media.js";
 import {
   GENERATE_TYPES,
-  checkGuide,
+  checkRequest,
   generate,
   parseMask,
   type GenerateRequest,
@@ -140,7 +140,7 @@ export default defineCommand({
       const price = priceOf(request);
       const credits = creditsOf(price);
       if (args.plan) {
-        checkGuide(request);
+        checkRequest(request);
         return {
           plan: true,
           type,

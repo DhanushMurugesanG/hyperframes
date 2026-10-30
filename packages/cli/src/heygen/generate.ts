@@ -280,7 +280,7 @@ const COUNT = ["", "one", "two", "three", "four", "five", "six"];
  * Refuses a --motion clip holding more than one shot before anything is sent: HeyGen follows the guide's cut into
  * a cut of its own, so each shot is its own generation.
  */
-export function checkGuide(r: Pick<GenerateRequest, "motion">): void {
+function checkGuide(r: Pick<GenerateRequest, "motion">): void {
   if (!r.motion) return;
   const { cuts, length } = cutsInside(r.motion, GUIDE_MAX_S);
   if (!cuts.length) return;
@@ -294,6 +294,13 @@ export function checkGuide(r: Pick<GenerateRequest, "motion">): void {
     `--motion ${r.motion} has ${at}`,
     `guide has ${at}: generate ${and(shots)} as ${COUNT[shots.length] ?? shots.length} shots, each with its own --motion clip`,
   );
+}
+
+/** What the real call would refuse, checked without sending anything: `--plan` prices only a request that would run.
+ *  The route's body runs with a stand-in for the media, so its required flags and conflicts are checked as sent. */
+export function checkRequest(r: GenerateRequest): void {
+  ROUTES[r.type].body(r, () => ({ type: "base64", media_type: "", data: "" }));
+  checkGuide(r);
 }
 
 /** The nearest folder at or above `from` holding index.html. */

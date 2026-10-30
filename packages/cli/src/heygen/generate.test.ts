@@ -10,7 +10,7 @@ vi.mock("../cloud/auth.js", () => ({
   resolveCloudBaseUrl: () => "https://api.test",
 }));
 
-const { generate, parseMask, urlOf } = await import("./generate.js");
+const { checkRequest, generate, parseMask, urlOf } = await import("./generate.js");
 const { checkLimit, creditsOf, priceOf } = await import("./pricing.js");
 const ffmpeg = findFFmpeg();
 const project = mkdtempSync(join(tmpdir(), "hf-generate-test-"));
@@ -330,6 +330,21 @@ describe("generate", () => {
       }).usd,
     ).toBe(0.07);
     expect(priceOf({ type: "voice", out: "a.mp3" }).usd).toBeNull();
+  });
+
+  it("prices only a request the real call would accept", () => {
+    // A re-shoot without --prompt used to get a price from --plan, then fail when sent.
+    const shot = {
+      type: "video" as const,
+      out: "a.mp4",
+      references: ["plate.png"],
+      audio: "voice.m4a",
+    };
+    expect(() => checkRequest(shot)).toThrow("--prompt is required for this type");
+    expect(() => checkRequest({ ...shot, prompt: "she talks to the camera" })).not.toThrow();
+    expect(() => checkRequest({ ...shot, prompt: "x", firstFrame: "f.png" })).toThrow(
+      "--first-frame cannot be used",
+    );
   });
 
   it("keeps a call under the person's credit limit, or refuses it before sending", () => {

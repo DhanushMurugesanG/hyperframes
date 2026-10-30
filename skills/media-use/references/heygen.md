@@ -9,7 +9,7 @@
 | Credential                 | Pays with                                    | Covers                                                                                                 |
 | -------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | API key                    | API credits                                  | everything below                                                                                       |
-| Sign-in (OAuth)            | the plan's allowance on subscription credits | avatar videos, video shots and voices; images, music, transcription and video analysis take an API key |
+| Sign-in (OAuth)            | the plan's allowance on subscription credits | avatar videos, video shots, images and voices; music, transcription and video analysis take an API key |
 | Inside the HyperFrames app | the app                                      | whatever the app allows; nothing to set up                                                             |
 
 A refusal names its fix: `api_key_required` needs an API key, `402` or `insufficient_credit` needs a top-up, `hf_usage_exhausted` means the plan's allowance is used up.
@@ -47,7 +47,7 @@ The file lands at `--out` and the media ledger records it as generated, with the
 | music  | lyria-3-pro                                              | $0.08 a track                                                                                                                                                          |
 | voice  | the voice's engine                                       | charged per character, not priced ahead                                                                                                                                |
 
-HeyGen charges in units of $1/60, rounded up; `--plan` prints that charged price. Voice ids come from `heygen voice list` or `npx hyperframes media-use resolve --type voice`; a cloned voice from `heygen voice clone create` (`operations.md`).
+`--plan`'s `usd` is what an API key is charged (HeyGen rounds up to units of $1/60); its `credits` is what a HyperFrames plan charges, from the list price, with no such rounding. Voice ids come from `heygen voice list` or `npx hyperframes media-use resolve --type voice`; a cloned voice from `heygen voice clone create` (`operations.md`).
 
 ## Transcription: `transcribe --engine heygen`
 

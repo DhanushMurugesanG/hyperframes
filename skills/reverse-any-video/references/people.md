@@ -10,7 +10,8 @@ Every person on screen, speaking or not, is re-shot with HeyGen so the original'
 
    ```bash
    npx hyperframes media-use generate --type video --reference <plate> --motion <the original shot> \
-     --mask <x,y,w,h,a-b> --audio <the original voice over that shot> --aspect <the source's> --seconds <n> --out <shot>.mp4
+     --mask <x,y,w,h,a-b> --audio <the original voice over that shot> --aspect <the source's> --seconds <n> \
+     --prompt "<who, where, what they do, the camera>" --out <shot>.mp4
    ```
 
    `--motion` is the original shot itself, cut at its cut times: HeyGen follows its body and camera motion and takes the face from the plate. It also copies text burned into the guide, so give one `--mask` per drawn box in that shot (the clip's pixels and seconds). Mask the text's own box, never a full-width band: a gesture under a mask is lost. A person who does not speak gets no `--audio`.

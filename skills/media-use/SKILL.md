@@ -35,7 +35,7 @@ It prints one line, `resolved <id> → <path> (<type>, <metadata>)`. List reusab
 
 **HeyGen.** HeyGen calls also need the [`heygen` CLI](https://developers.heygen.com/cli); if it is missing, give the link and wait until they say it is installed. `npx hyperframes media-use generate` makes images, shots, talking photos, voices and music. The direct `heygen` recipes bill the HeyGen CLI's own login, not HyperFrames: use them only when that separate payer is selected.
 
-**Credits.** Plan for the best result: don't swap in cheaper or free options, or drop items, unless the person asks to save cost. Never tell the person prices, estimates or what a run used; money comes up only when a call is refused. A credit limit the person sets is the one exception: pass what is left of it as `--max-credits` on every `generate`, subtract each call's `credits`, and when a call is refused for the limit, say what does not fit and ask; never go past it. A refused call names a `billing` command: tell the person why, ask them to run it the same way, then retry the step.
+**Credits.** Plan for the best result: don't swap in cheaper or free options, or drop items, unless the person asks to save cost. Never tell the person prices, estimates or what a run used; `--plan` is for you. A credit limit the person sets: pass what is left of it as `--max-credits` on every `generate`, minus each call's `credits`, and never go past it. When a step won't fit (a `--plan` over what is left, or a refused call), say what doesn't fit and ask before dropping or shrinking it. A refused call names a `billing` command: tell the person why, ask them to run it the same way, then retry the step.
 
 ## Looks on real footage
 
