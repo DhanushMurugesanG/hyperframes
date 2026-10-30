@@ -299,7 +299,12 @@ function checkGuide(r: Pick<GenerateRequest, "motion">): void {
 /** What the real call would refuse, checked without sending anything: `--plan` prices only a request that would run.
  *  The route's body runs with a stand-in for the media, so its required flags and conflicts are checked as sent. */
 export function checkRequest(r: GenerateRequest): void {
-  ROUTES[r.type].body(r, () => ({ type: "base64", media_type: "", data: "" }));
+  const route = ROUTES[r.type];
+  if (!route.ext.includes(extname(r.out).toLowerCase()))
+    throw new Fix(`--out ${r.out} does not fit a ${r.type}`, `--out assets/name${route.ext[0]}`);
+  if (r.masks?.length && !r.motion)
+    throw new Fix("--mask blanks regions of the --motion clip", "pass --motion with --mask");
+  route.body(r, () => ({ type: "base64", media_type: "", data: "" }));
   checkGuide(r);
 }
 
@@ -326,17 +331,13 @@ export async function generate(
   r: GenerateRequest,
   onWait?: (status: string) => void,
 ): Promise<Generated> {
+  checkRequest(r);
   const route = ROUTES[r.type];
   const out = resolve(r.out);
-  if (!route.ext.includes(extname(out).toLowerCase()))
-    throw new Fix(`--out ${r.out} does not fit a ${r.type}`, `--out assets/name${route.ext[0]}`);
   mkdirSync(dirname(out), { recursive: true });
   const project = projectOf(dirname(out));
   const work = mkdtempSync(join(tmpdir(), "hf-generate-"));
   try {
-    if (r.masks?.length && !r.motion)
-      throw new Fix("--mask blanks regions of the --motion clip", "pass --motion with --mask");
-    checkGuide(r);
     const body = route.body(r, inline(work, r.masks));
     const key = idempotencyKey(route.path, [JSON.stringify(body)]);
     const job = await runJob(route.path, body, key, (id) => route.poll(encodeURIComponent(id)), {

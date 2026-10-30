@@ -333,7 +333,7 @@ describe("generate", () => {
   });
 
   it("prices only a request the real call would accept", () => {
-    // A re-shoot without --prompt used to get a price from --plan, then fail when sent.
+    // --plan runs the same checks as the real call, so it never prices a request the call would refuse.
     const shot = {
       type: "video" as const,
       out: "a.mp4",
@@ -344,6 +344,12 @@ describe("generate", () => {
     expect(() => checkRequest({ ...shot, prompt: "she talks to the camera" })).not.toThrow();
     expect(() => checkRequest({ ...shot, prompt: "x", firstFrame: "f.png" })).toThrow(
       "--first-frame cannot be used",
+    );
+    expect(() => checkRequest({ ...shot, prompt: "x", out: "a.png" })).toThrow(
+      "--out a.png does not fit a video",
+    );
+    expect(() => checkRequest({ ...shot, prompt: "x", masks: [parseMask("1,1,2,2")] })).toThrow(
+      "--mask blanks regions of the --motion clip",
     );
   });
 
