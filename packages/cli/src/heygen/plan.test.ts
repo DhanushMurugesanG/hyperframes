@@ -5,7 +5,7 @@ vi.mock("../cloud/auth.js", () => ({
   resolveCloudBaseUrl: () => "https://api.dev.heygen.com",
 }));
 
-const { readPlan } = await import("./plan.js");
+const { pageUrl, readPlan } = await import("./plan.js");
 
 const asked: string[] = [];
 const answer = (data: unknown) =>
@@ -14,7 +14,10 @@ const answer = (data: unknown) =>
     return new Response(JSON.stringify({ code: 100, data }));
   });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 describe("readPlan", () => {
   it("reads the plan the way the subscription route sends it", async () => {
@@ -31,5 +34,19 @@ describe("readPlan", () => {
       usage: { remaining_units: 0 },
     });
     expect((await readPlan())?.plan).toBe("none");
+  });
+});
+
+describe("pageUrl", () => {
+  it("links the web app for HYPERFRAMES_ENV and tells the page the buyer came from the CLI", () => {
+    vi.stubEnv("HYPERFRAMES_PLANS_URL", "");
+    vi.stubEnv("HYPERFRAMES_CREDITS_URL", "");
+    vi.stubEnv("HYPERFRAMES_ENV", "prod");
+    expect(pageUrl("plans")).toBe("https://hyperframes.studio/pricing?from=cli");
+    vi.stubEnv("HYPERFRAMES_ENV", "dev");
+    expect(pageUrl("plans")).toBe("https://dev.hyperframes.dev/pricing?from=cli");
+    expect(pageUrl("credits", { needed: 180, tool: "reverse" })).toBe(
+      "https://dev.hyperframes.dev/account/plan?from=cli&needed_credits=180&tool=reverse",
+    );
   });
 });

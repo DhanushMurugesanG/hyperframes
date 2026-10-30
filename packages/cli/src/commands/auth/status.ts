@@ -215,10 +215,13 @@ function printJsonStatus(s: VerifiedStatus): void {
   };
   if (s.credential.type === "oauth") {
     payload["hyperframes_balance"] = null;
-    payload["billing_notice"] =
-      product === "hyperframes"
-        ? "HyperFrames balance is unavailable here; user billing fields describe the HeyGen account."
-        : "OAuth billing product is not verified here; user billing fields describe the HeyGen account.";
+    // With the plan read, `hyperframes` above holds the plan and credits, so there is no notice to give.
+    if (product !== "hyperframes")
+      payload["billing_notice"] =
+        "OAuth billing product is not verified here; user billing fields describe the HeyGen account.";
+    else if (!s.plan)
+      payload["billing_notice"] =
+        "HyperFrames balance is unavailable here; user billing fields describe the HeyGen account.";
     payload["expires_at"] = s.credential.expires_at?.toISOString() ?? null;
     payload["refreshable"] = s.credential.refreshable;
     payload["scope"] = s.credential.scope ?? null;

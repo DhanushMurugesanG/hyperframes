@@ -1,4 +1,5 @@
 // The HyperFrames plan and credits the signed-in account holds, and the web pages that change them.
+import { oauthEnvironment } from "../auth/config.js";
 import { resolveCloudAuthHeaders, resolveCloudBaseUrl } from "../cloud/auth.js";
 
 export interface Plan {
@@ -46,17 +47,18 @@ export async function readPlan(): Promise<Plan | null> {
   }
 }
 
-const plansUrl = () => process.env["HYPERFRAMES_PLANS_URL"] || "https://hyperframes.studio/pricing";
-const creditsUrl = () =>
-  process.env["HYPERFRAMES_CREDITS_URL"] || "https://hyperframes.studio/account/plan";
+const webBase = () =>
+  oauthEnvironment() === "dev" ? "https://dev.hyperframes.dev" : "https://hyperframes.studio";
+const plansUrl = () => process.env["HYPERFRAMES_PLANS_URL"] || `${webBase()}/pricing`;
+const creditsUrl = () => process.env["HYPERFRAMES_CREDITS_URL"] || `${webBase()}/account/plan`;
 
-/** A plans or credits page link carrying the fields the web side reads (source, needed credits, the waiting step). */
+/** A plans or credits page link with what the web side reads: `from=cli`, the credits needed, the waiting step. */
 export function pageUrl(
   kind: "plans" | "credits",
   fields: { needed?: number; tool?: string; base?: string } = {},
 ): string {
   const url = new URL(fields.base ?? (kind === "plans" ? plansUrl() : creditsUrl()));
-  url.searchParams.set("source", "cli");
+  url.searchParams.set("from", "cli");
   if (fields.needed) url.searchParams.set("needed_credits", String(fields.needed));
   if (fields.tool) url.searchParams.set("tool", fields.tool);
   return url.toString();
