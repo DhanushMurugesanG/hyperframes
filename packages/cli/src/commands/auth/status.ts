@@ -264,7 +264,7 @@ function collectStatusRows(s: VerifiedStatus): [string, string][] {
     if (cached) rows.push(["Account:", `${cached} ${c.dim("(cached)")}`]);
     return rows;
   }
-  if (s.user) rows.push(...identityRows(s.user, billingProduct(s.credential)));
+  if (s.user) rows.push(...identityRows(s.user, billingProduct(s.credential), !!s.plan));
   const plan = s.plan;
   if (plan) {
     const tag = plan.mock ? ` ${c.dim("(mock)")}` : "";
@@ -291,14 +291,21 @@ function oauthRows(credential: Extract<ResolvedCredential, { type: "oauth" }>): 
   return rows;
 }
 
-function identityRows(user: UserInfo, product: BillingProduct): [string, string][] {
+/** `hasPlan`: the HyperFrames line below shows the plan and credits, so no "unavailable" balance above it. */
+function identityRows(
+  user: UserInfo,
+  product: BillingProduct,
+  hasPlan = false,
+): [string, string][] {
   const identity = user.email ?? user.username ?? "(unknown user)";
   const rows: [string, string][] = [["Account:", identity]];
   if (product === "hyperframes")
     return [
       ...rows,
       ["Billing:", "HyperFrames"],
-      ["Balance:", "HyperFrames balance unavailable here."],
+      ...(hasPlan
+        ? []
+        : [["Balance:", "HyperFrames balance unavailable here."] as [string, string]]),
     ];
   if (product === "unknown")
     return [
