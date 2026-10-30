@@ -215,6 +215,28 @@ describe("RenderObservabilityRecorder", () => {
     vi.useRealTimers();
   });
 
+  it("tells the stall rule each time a capture attempt opens", async () => {
+    const recorder = new RenderObservabilityRecorder({
+      pipelineStartMs: Date.now(),
+      log: makeLog(),
+      renderJobId: "render-attempt-opened",
+    });
+    const attemptOpened = vi.fn();
+    await observeRenderStage(
+      recorder,
+      "capture_disk",
+      undefined,
+      async (openAttempt) => {
+        openAttempt();
+        openAttempt();
+      },
+      {
+        stall: { progress: () => 0, noProgressMs: 10_000, firstProgressMs: 10_000, attemptOpened },
+      },
+    );
+    expect(attemptOpened).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps emitting heartbeats every 120s once the initial ramp is exhausted", async () => {
     vi.useFakeTimers();
     const log = makeLog();

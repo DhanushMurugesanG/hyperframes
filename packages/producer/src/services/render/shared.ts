@@ -368,6 +368,10 @@ export function reportAssembleProgress(
 
 const workerPhasesByJob = new WeakMap<object, Map<number, string>>();
 
+export function forgetWorkerPhases(job: object): void {
+  workerPhasesByJob.delete(job);
+}
+
 export function describeWorkerPhases(job: object): string | undefined {
   const phases = workerPhasesByJob.get(job);
   if (!phases?.size) return undefined;

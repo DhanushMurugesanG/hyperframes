@@ -615,6 +615,8 @@ export interface StageStallRule {
   tailMs?: number;
   /** Where the stage was waiting, appended to the stall message. */
   detail?: () => string | undefined;
+  /** Called as each capture attempt opens, so `detail` never describes an earlier attempt. */
+  attemptOpened?: () => void;
 }
 
 /**
@@ -678,6 +680,7 @@ function watchStall(phase: string, rule: StageStallRule) {
   const openAttempt: OpenStallAttempt = (parent) => {
     attempt = new AbortController();
     inTail = false;
+    rule.attemptOpened?.();
     restartWindow(rule.firstProgressMs);
     return parent ? AbortSignal.any([parent, attempt.signal]) : attempt.signal;
   };

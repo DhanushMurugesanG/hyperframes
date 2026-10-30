@@ -3,6 +3,7 @@ import type { ParallelProgress } from "@hyperframes/engine";
 import type { RenderJob } from "../renderOrchestrator.js";
 import {
   describeWorkerPhases,
+  forgetWorkerPhases,
   reportAssembleProgress,
   reportEncodeProgress,
   reportFrameProgress,
@@ -80,6 +81,8 @@ describe("describeWorkerPhases", () => {
     expect(describeWorkerPhases(job)).toBe(
       "Last phase per worker: worker 0 frame_capture, worker 1 session_init.",
     );
+    forgetWorkerPhases(job);
+    expect(describeWorkerPhases(job)).toBeUndefined();
   });
 });
 

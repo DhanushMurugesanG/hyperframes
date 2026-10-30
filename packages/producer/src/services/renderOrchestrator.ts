@@ -137,6 +137,7 @@ import {
 import {
   createMemorySampler,
   describeWorkerPhases,
+  forgetWorkerPhases,
   type MemorySampler,
   updateJobStatus,
 } from "./render/shared.js";
@@ -1192,6 +1193,7 @@ export function frameStallRule(
     complete: () => (job.framesRendered ?? 0) >= totalFrames,
     tailMs: Math.max(TAIL_STALL_MS, noProgressMs),
     detail: () => describeWorkerPhases(job),
+    attemptOpened: () => forgetWorkerPhases(job),
   };
 }
 
