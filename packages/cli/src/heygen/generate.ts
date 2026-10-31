@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { findCuts, signatures } from "../measure/cuts.js";
-import { Fix, probeVideo, round, runFfmpeg, videoClip } from "../measure/media.js";
+import { Fix, probeVideo, projectOf, round, runFfmpeg, videoClip } from "../measure/media.js";
 import { idempotencyKey, runJob, type Job } from "./v3.js";
 
 export type GenerateType = "image" | "video" | "avatar" | "voice" | "music";
@@ -442,14 +442,6 @@ export function checkRequest(r: GenerateRequest): void {
     return { type: "base64", media_type: "", data: "" };
   });
   checkGuide(r);
-}
-
-/** The nearest folder at or above `from` holding index.html. */
-function projectOf(from: string): string | null {
-  for (let dir = resolve(from); ; dir = dirname(dir)) {
-    if (existsSync(join(dir, "index.html"))) return dir;
-    if (dirname(dir) === dir) return null;
-  }
 }
 
 export interface Generated {
