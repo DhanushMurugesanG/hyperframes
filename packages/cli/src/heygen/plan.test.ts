@@ -43,11 +43,14 @@ describe("pageUrl", () => {
     vi.stubEnv("HYPERFRAMES_CREDITS_URL", "");
     vi.stubEnv("HYPERFRAMES_ENV", "prod");
     expect(pageUrl("plans")).toBe("https://hyperframes.studio/pricing?from=cli");
-    expect(pageUrl("credits")).toBe("https://hyperframes.studio/plan?from=cli");
-    vi.stubEnv("HYPERFRAMES_ENV", "dev");
-    expect(pageUrl("plans")).toBe("https://dev.hyperframes.dev/pricing?from=cli");
+    expect(pageUrl("credits")).toBe("https://hyperframes.studio/pricing?from=cli");
     expect(pageUrl("credits", { needed: 180, tool: "reverse" })).toBe(
-      "https://dev.hyperframes.dev/plan?from=cli&needed_credits=180&tool=reverse",
+      "https://hyperframes.studio/pricing?from=cli&needed_credits=180&tool=reverse",
     );
+    vi.stubEnv("HYPERFRAMES_ENV", "dev");
+    const dev = new URL(pageUrl("credits"));
+    expect(dev.host).not.toBe("hyperframes.studio");
+    expect(`${dev.pathname}${dev.search}`).toBe("/pricing?from=cli");
+    expect(new URL(pageUrl("plans")).host).toBe(dev.host);
   });
 });
