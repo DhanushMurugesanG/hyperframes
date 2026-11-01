@@ -97,6 +97,7 @@ export interface ExtractVideosStageInput {
    */
   materializeSymlinks?: boolean;
   deferRangeExtraction?: boolean;
+  skipFrameExtractionIds?: readonly string[];
   urlByAbsentLocalPath?: ReadonlyMap<string, string>;
   onProgress?: ProgressCallback;
 }
@@ -415,6 +416,7 @@ export async function runExtractVideosStage(
     materializeSymlinks,
     deferRangeExtraction,
     urlByAbsentLocalPath,
+    skipFrameExtractionIds = [],
   } = input;
 
   const stage2Start = Date.now();
@@ -515,7 +517,10 @@ export async function runExtractVideosStage(
     imageColorSpaces.push(...probed);
   }
 
-  if (composition.videos.length > 0) {
+  if (skipFrameExtractionIds.length > 0) {
+    await appendVideoAudioFromProbe({ projectDir, compiledDir, composition, urlByAbsentLocalPath });
+    videoReadinessSkipIds = [...skipFrameExtractionIds];
+  } else if (composition.videos.length > 0) {
     const totalVideos = composition.videos.length;
     for (let i = 0; i < totalVideos; i++) {
       const v = composition.videos[i]!;

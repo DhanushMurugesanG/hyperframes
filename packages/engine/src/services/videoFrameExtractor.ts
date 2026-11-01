@@ -35,6 +35,7 @@ import {
   parseStrictFiniteTimingNumber,
   readMediaStart,
   toFps,
+  type Fps,
   type FpsInput,
   firstFrameColourArgs,
   hdrToSdrToneMapFilter,
@@ -1200,6 +1201,61 @@ function videoFilterChain(input: VideoFilterChainInput): (seek: number) => strin
     }
   }
   return (seek) => [...head, ...sampling(seek), ...tail];
+}
+
+export interface VideoLayerInput {
+  inputArgs: string[];
+  filters: string[];
+}
+
+/** ffmpeg input and filters showing the same frames and colour as extraction; undefined if unsupported. */
+export async function buildVideoLayerInput(
+  videoPath: string,
+  startTime: number,
+  duration: number,
+  fps: Fps,
+  canvas: { width: number; height: number },
+  fit: "fill" | "cover" = "fill",
+): Promise<VideoLayerInput | undefined> {
+  const metadata = await extractMediaMetadata(videoPath);
+  if (
+    startTime + duration > resolvePlayableVideoDuration(metadata) + 1e-3 ||
+    isHdrColorSpaceUtil(metadata.colorSpace) ||
+    metadata.isVFR ||
+    metadata.hasAlpha ||
+    codecMayHaveAlpha(metadata.videoCodec)
+  ) {
+    return undefined;
+  }
+  const chain = videoFilterChain({
+    metadata,
+    format: "png",
+    ffmpegFps: fpsToFfmpegArg(fps),
+    sampleAtOutputFps: true,
+    keepsHdrForChrome: false,
+    isHdr: false,
+  });
+  const filters = chain(startTime);
+  if (metadata.width !== canvas.width || metadata.height !== canvas.height) {
+    filters.push(
+      fit === "cover"
+        ? `scale=${canvas.width}:${canvas.height}:force_original_aspect_ratio=increase:flags=bicubic,crop=${canvas.width}:${canvas.height}`
+        : `scale=${canvas.width}:${canvas.height}:flags=bicubic`,
+    );
+  }
+  return {
+    inputArgs: [
+      "-noaccurate_seek",
+      "-ss",
+      formatFfmpegSeconds(ffmpegSeekSeconds(metadata, startTime)),
+      ...urlInputArgs(videoPath),
+      "-i",
+      videoPath,
+      "-t",
+      formatFfmpegSeconds(duration),
+    ],
+    filters,
+  };
 }
 
 async function extractVideoFramesRangeUnredacted(
