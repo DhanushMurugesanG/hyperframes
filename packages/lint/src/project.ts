@@ -1,6 +1,6 @@
 export { shouldBlockRender } from "./shouldBlockRender.js";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { rewriteAssetPath } from "@hyperframes/parsers/asset-paths";
 import { spansOverlap } from "@hyperframes/parsers/time-spans";
@@ -32,6 +32,7 @@ import {
   resolveExistingLocalAsset,
   resolveLocalAssetCandidates,
   resolveProjectRelativeSrc,
+  readTextFile,
 } from "@hyperframes/parsers/asset-resolution";
 import { encodeUrlPath } from "@hyperframes/parsers";
 import {
@@ -155,6 +156,42 @@ export function collectExternalStyles(
   return styles;
 }
 
+const MAX_EXTERNAL_SCRIPT_BYTES = 1_000_000;
+
+function collectExternalScripts(
+  projectDir: string,
+  html: string,
+  compSrcPath?: string,
+): NonNullable<HyperframeLinterOptions["externalScripts"]> {
+  const scripts: NonNullable<HyperframeLinterOptions["externalScripts"]> = [];
+  const { document } = parseHTML(html);
+  for (const element of querySelectorAllIncludingTemplates(document, "script[src]")) {
+    const src = element.getAttribute("src") ?? "";
+    if (!isLocalStylesheetHref(src) || /\.min\.m?js(?:[?#]|$)/i.test(src)) continue;
+    const path = src.split(/[?#]/)[0] ?? src;
+    const besideFile = compSrcPath ? join(dirname(compSrcPath), path) : path;
+    const script =
+      resolveExistingLocalAsset(projectDir, besideFile) ??
+      (compSrcPath && staysInsideProjectRoot(path)
+        ? resolveExistingLocalAsset(projectDir, path)
+        : null);
+    if (!script) continue;
+    const read = readProjectFile(script.resolved);
+    if (read.kind !== "file" || read.text.length > MAX_EXTERNAL_SCRIPT_BYTES) continue;
+    const attrs = Array.from(element.attributes)
+      .map(({ name, value }) => `${name}="${value.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"`)
+      .join(" ");
+    scripts.push({
+      src,
+      attrs,
+      content: read.text,
+      file: join(projectDir, script.rootRelativePath),
+      rootRelativePath: script.rootRelativePath,
+    });
+  }
+  return scripts;
+}
+
 function collectCssSources(projectDir: string, html: string, compSrcPath?: string): CssSource[] {
   const sources: CssSource[] = [];
   const { document } = parseHTML(html);
@@ -257,7 +294,7 @@ export async function lintProject(
   let totalWarnings = 0;
   let totalInfos = 0;
 
-  const rootHtml = readFileSync(indexPath, "utf-8");
+  const rootHtml = readTextFile(indexPath);
   const projectFontFamilies = declaredProjectFontFamilies(
     projectDir,
     mountedSources(projectDir, rootHtml, rootCompSrcPath),
@@ -268,6 +305,7 @@ export async function lintProject(
     compSrcPath: rootFile,
     externalStyles: collectExternalStyles(projectDir, rootHtml, rootCompSrcPath),
     projectFontFamilies,
+    externalScripts: collectExternalScripts(projectDir, rootHtml, rootCompSrcPath),
   });
   results.push({ file: rootFile, result: rootResult, contentHash: contentDigest(rootHtml) });
   totalErrors += rootResult.errorCount;
@@ -296,7 +334,7 @@ export async function lintProject(
     const files = collectHtmlFiles(compositionsDir, "").sort();
     for (const file of files) {
       const filePath = join(compositionsDir, file);
-      const html = readFileSync(filePath, "utf-8");
+      const html = readTextFile(filePath);
       const compSrcPath = `compositions/${file}`;
       allHtmlSources.push({ html, compSrcPath });
       // Mountable fragments (figma component imports, registry snippets) are
@@ -311,6 +349,7 @@ export async function lintProject(
         compSrcPath,
         externalStyles: collectExternalStyles(projectDir, html, compSrcPath),
         projectFontFamilies,
+        externalScripts: collectExternalScripts(projectDir, html, compSrcPath),
       });
       results.push({
         file: `compositions/${file}`,
@@ -691,6 +730,8 @@ function lintLinkedStylesheetAssets(
   return findings;
 }
 
+const PAGES_OPENED_BESIDE_INDEX = new Set(["caption-skin.html", "podcast-lanes.html"]);
+
 function lintMultipleRootCompositions(projectDir: string): HyperframeLintFinding[] {
   const findings: HyperframeLintFinding[] = [];
   try {
@@ -699,8 +740,8 @@ function lintMultipleRootCompositions(projectDir: string): HyperframeLintFinding
     );
     const rootCompositions: string[] = [];
     for (const file of rootHtmlFiles) {
-      if (file === "caption-skin.html") continue;
-      const content = readFileSync(join(projectDir, file), "utf-8");
+      if (PAGES_OPENED_BESIDE_INDEX.has(file)) continue;
+      const content = readTextFile(join(projectDir, file));
       if (/data-composition-id/i.test(content)) {
         rootCompositions.push(file);
       }
