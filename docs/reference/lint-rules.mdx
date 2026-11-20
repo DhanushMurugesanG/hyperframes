@@ -874,6 +874,46 @@ Source: `packages/lint/src/rules/linkedClips.ts`.
 
 **Fix:** Give every member the same `data-start`, `data-duration`, `data-media-start` and `data-playback-rate`, or remove `data-link` from all of them to unlink.
 
+## Narration
+
+Source: `packages/lint/src/projectNarration.ts`. These run only when the project has a `narration.json`, the manifest that links each voiced line to the `<audio data-narration-line="...">` clip that speaks it and to the caption words that show it. They are warnings and infos, so drift never blocks a render.
+
+### `narration_manifest_invalid`
+
+**Warning.** `narration.json` is not valid JSON, or a field has the wrong shape (a line without an id, audio file or duration, a word without numeric times).
+
+**Fix:** Fix the listed fields, or recreate the file with `hyperframes narration init`.
+
+### `narration_line_unlinked`
+
+**Warning.** A line in `narration.json` has no `<audio data-narration-line>` clip on the timeline, is linked from more than one clip, or a clip names a line the manifest does not list.
+
+**Fix:** Put `data-narration-line="<id>"` on the one `<audio>` that plays the line, or remove it from the clip.
+
+### `narration_audio_stale`
+
+**Warning.** A line's text, voice settings or WAV changed since it was voiced, or its audio file is missing, so the voice no longer says what the manifest says.
+
+**Fix:** Run `hyperframes narration set <id>` to re-voice the line and update its captions.
+
+### `narration_clip_timing_mismatch`
+
+**Warning.** The line's clip plays for more than 0.05 s longer or shorter than the line lasts, so the voice is cut off or followed by silence.
+
+**Fix:** Set the clip's `data-duration` to the line's `durationSeconds`, or run `hyperframes narration set <id>`.
+
+### `narration_captions_out_of_sync`
+
+**Warning.** The caption words that show a line (tagged with `"line": "<id>"`, or untagged words inside its clip) differ in number from the line's words, or one starts more than 0.1 s from where the voice says it.
+
+**Fix:** Run `hyperframes narration set <id>`, which re-times that line's caption words from its voice.
+
+### `narration_transcript_mismatch`
+
+**Info.** A line's captions are in sync with its voice but read differently from its text, often because a transcriber wrote a number as digits (47 for forty-seven).
+
+**Fix:** Usually none. Edit the caption words if they should match the script.
+
 ## Project-level checks
 
 Source: the project lint pass in `packages/lint/src/project.ts`, `packages/lint/src/hyperframeLinter.ts` and `packages/lint/src/hevcPreviewLint.ts`.
