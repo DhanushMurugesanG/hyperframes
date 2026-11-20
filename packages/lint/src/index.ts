@@ -14,4 +14,5 @@ export {
 export { linkedSources, lintProject, shouldBlockRender, unmountedNotice } from "./project.js";
 export type { ProjectLintOptions, ProjectLintResult } from "./project.js";
 export { projectIgnore } from "./projectIgnore.js";
+export { narrationTextHash } from "./projectNarration.js";
 export { audioAttributeShapeError, type AudioAttribute } from "./rules/audioAttributes.js";
